@@ -45,8 +45,8 @@ class SSLScanParser:
             # Parse certificate information
             result['certificate'] = self._parse_certificate(output)
             
-            # Parse vulnerabilities
-            result['vulnerabilities'] = self._parse_vulnerabilities(output)
+            # No specific vulnerability parsing needed - focus on weak ciphers
+            result['vulnerabilities'] = {}
             
             # Parse security features
             result['security_features'] = self._parse_security_features(output)
@@ -166,26 +166,8 @@ class SSLScanParser:
         return cert_info
     
     def _parse_vulnerabilities(self, output: str) -> Dict[str, bool]:
-        """Extract vulnerability information"""
-        vulnerabilities = {
-            'heartbleed': False,
-            'compression': False
-        }
-        
-        # Check for Heartbleed
-        if 'vulnerable to heartbleed' in output.lower():
-            vulnerabilities['heartbleed'] = True
-        elif 'not vulnerable to heartbleed' in output.lower():
-            vulnerabilities['heartbleed'] = False
-        
-        # Check for compression
-        if 'compression' in output.lower():
-            if 'does not support compression' in output.lower():
-                vulnerabilities['compression'] = False
-            else:
-                vulnerabilities['compression'] = True
-        
-        return vulnerabilities
+        """Extract vulnerability information - simplified to not include specific vulnerability tests"""
+        return {}
     
     def _parse_security_features(self, output: str) -> Dict[str, bool]:
         """Extract security feature information"""
@@ -241,7 +223,7 @@ class SSLScanner:
     
     def _scan_with_python_ssl(self, hostname: str, timeout: int = 30) -> Dict:
         """
-        Perform SSL scan using Python's ssl module with comprehensive protocol testing
+        Perform SSL scan using Python's ssl module with comprehensive protocol and cipher testing
         """
         result = {
             'protocols': {},
@@ -262,12 +244,14 @@ class SSLScanner:
             'tlsv1_3': False
         }
         
-        # Test each TLS version individually
+        # Test each SSL/TLS version with comprehensive cipher enumeration
         protocols_to_test = [
             ('TLSv1.3', 'tlsv1_3'),
             ('TLSv1.2', 'tlsv1_2'),  
             ('TLSv1.1', 'tlsv1_1'),
             ('TLSv1', 'tlsv1_0'),
+            ('SSLv3', 'sslv3'),
+            ('SSLv2', 'sslv2'),
         ]
         
         certificate_info = None
@@ -275,12 +259,18 @@ class SSLScanner:
         
         for protocol_name, protocol_key in protocols_to_test:
             try:
-                # Create context for specific protocol
+                # Special handling for SSLv2 since Python's ssl module doesn't support it
+                if protocol_name == 'SSLv2':
+                    # Try to test SSLv2 using raw socket approach
+                    result['protocols'][protocol_key] = self._test_sslv2(hostname, timeout)
+                    continue
+                
+                # Test if protocol is supported first with default cipher
                 context = ssl.SSLContext()
                 context.check_hostname = False
                 context.verify_mode = ssl.CERT_NONE
                 
-                # Configure context for specific TLS version with more permissive settings
+                # Configure context for specific TLS version
                 if protocol_name == 'TLSv1.3':
                     try:
                         context.minimum_version = ssl.TLSVersion.TLSv1_3
@@ -295,7 +285,6 @@ class SSLScanner:
                         continue
                 elif protocol_name == 'TLSv1.1':
                     try:
-                        # Enable deprecated protocols
                         context.set_ciphers('ALL:@SECLEVEL=0')
                         context.minimum_version = ssl.TLSVersion.TLSv1_1
                         context.maximum_version = ssl.TLSVersion.TLSv1_1
@@ -303,40 +292,118 @@ class SSLScanner:
                         continue
                 elif protocol_name == 'TLSv1':
                     try:
-                        # Enable deprecated protocols
                         context.set_ciphers('ALL:@SECLEVEL=0')
                         context.minimum_version = ssl.TLSVersion.TLSv1
                         context.maximum_version = ssl.TLSVersion.TLSv1
                     except:
                         continue
+                elif protocol_name == 'SSLv3':
+                    try:
+                        context.set_ciphers('ALL:@SECLEVEL=0')
+                        context.minimum_version = ssl.TLSVersion.SSLv3
+                        context.maximum_version = ssl.TLSVersion.SSLv3
+                    except:
+                        continue
+                elif protocol_name == 'SSLv2':
+                    # SSLv2 is not supported by Python's ssl module
+                    # We'll use a different approach for testing
+                    continue
                 
-                # Test connection
-                with socket.create_connection((hostname, 443), timeout=timeout) as sock:
-                    with context.wrap_socket(sock, server_hostname=hostname) as ssock:
-                        # Protocol is supported
-                        result['protocols'][protocol_key] = True
+                # Test connection with default ciphers
+                protocol_supported = False
+                try:
+                    with socket.create_connection((hostname, 443), timeout=timeout) as sock:
+                        with context.wrap_socket(sock, server_hostname=hostname) as ssock:
+                            protocol_supported = True
+                            result['protocols'][protocol_key] = True
+                            
+                            # Get certificate info (only once)
+                            if certificate_info is None:
+                                cert = ssock.getpeercert()
+                                if cert:
+                                    certificate_info = self._parse_python_cert(cert)
+                            
+                            logger.info(f"{hostname}: {protocol_name} supported")
+                except:
+                    continue
+                
+                if not protocol_supported:
+                    continue
+                
+                # Now enumerate specific cipher suites for this protocol
+                cipher_suites = self._get_cipher_suites_for_protocol(protocol_name)
+                
+                for cipher_suite in cipher_suites:
+                    try:
+                        # Create new context for each cipher test
+                        cipher_context = ssl.SSLContext()
+                        cipher_context.check_hostname = False
+                        cipher_context.verify_mode = ssl.CERT_NONE
                         
-                        # Get certificate info (only once)
-                        if certificate_info is None:
-                            cert = ssock.getpeercert()
-                            if cert:
-                                certificate_info = self._parse_python_cert(cert)
+                        # Set protocol version
+                        if protocol_name == 'TLSv1.3':
+                            try:
+                                cipher_context.minimum_version = ssl.TLSVersion.TLSv1_3
+                                cipher_context.maximum_version = ssl.TLSVersion.TLSv1_3
+                            except:
+                                continue
+                        elif protocol_name == 'TLSv1.2':
+                            try:
+                                cipher_context.minimum_version = ssl.TLSVersion.TLSv1_2
+                                cipher_context.maximum_version = ssl.TLSVersion.TLSv1_2
+                            except:
+                                continue
+                        elif protocol_name == 'TLSv1.1':
+                            try:
+                                cipher_context.set_ciphers('ALL:@SECLEVEL=0')
+                                cipher_context.minimum_version = ssl.TLSVersion.TLSv1_1
+                                cipher_context.maximum_version = ssl.TLSVersion.TLSv1_1
+                            except:
+                                continue
+                        elif protocol_name == 'TLSv1':
+                            try:
+                                cipher_context.set_ciphers('ALL:@SECLEVEL=0')
+                                cipher_context.minimum_version = ssl.TLSVersion.TLSv1
+                                cipher_context.maximum_version = ssl.TLSVersion.TLSv1
+                            except:
+                                continue
+                        elif protocol_name == 'SSLv3':
+                            try:
+                                cipher_context.set_ciphers('ALL:@SECLEVEL=0')
+                                cipher_context.minimum_version = ssl.TLSVersion.SSLv3
+                                cipher_context.maximum_version = ssl.TLSVersion.SSLv3
+                            except:
+                                continue
+                        elif protocol_name == 'SSLv2':
+                            # SSLv2 testing would be handled separately if needed
+                            continue
                         
-                        # Get cipher info
-                        cipher = ssock.cipher()
-                        if cipher:
-                            cipher_info.append({
-                                'name': cipher[0],
-                                'protocol': protocol_name,
-                                'bits': cipher[2],
-                                'preference': 'Accepted',
-                                'is_weak': self._is_weak_cipher(cipher[0])
-                            })
+                        # Set specific cipher
+                        try:
+                            cipher_context.set_ciphers(cipher_suite['openssl_name'])
+                        except:
+                            continue
                         
-                        logger.info(f"{hostname}: {protocol_name} supported")
+                        # Test this specific cipher
+                        with socket.create_connection((hostname, 443), timeout=5) as sock:
+                            with cipher_context.wrap_socket(sock, server_hostname=hostname) as ssock:
+                                negotiated_cipher = ssock.cipher()
+                                if negotiated_cipher:
+                                    cipher_info.append({
+                                        'name': negotiated_cipher[0],
+                                        'protocol': protocol_name,
+                                        'bits': negotiated_cipher[2],
+                                        'preference': 'Accepted',
+                                        'is_weak': self._is_weak_cipher(negotiated_cipher[0])
+                                    })
+                                    logger.debug(f"{hostname}: {protocol_name} cipher {negotiated_cipher[0]} supported")
+                    
+                    except Exception as e:
+                        # Cipher not supported or connection failed
+                        logger.debug(f"{hostname}: {protocol_name} cipher {cipher_suite['name']} not supported: {e}")
+                        continue
                         
             except ssl.SSLError:
-                # Protocol not supported
                 logger.debug(f"{hostname}: {protocol_name} not supported")
                 continue
             except Exception as e:
@@ -356,10 +423,8 @@ class SSLScanner:
             'secure_renegotiation': True  # Most modern servers support this
         }
         
-        result['vulnerabilities'] = {
-            'heartbleed': False,  # We can't easily test this with Python SSL
-            'compression': False  # Compression is typically disabled
-        }
+        # Only track weak ciphers - no vulnerability testing needed
+        result['vulnerabilities'] = {}
         
         return result
     
@@ -368,20 +433,26 @@ class SSLScanner:
         cert_info = {}
         
         if 'subject' in cert:
-            # Extract subject
+            # Extract subject - find CN (Common Name) first
             subject_parts = []
+            cn = None
             for item in cert['subject']:
                 for key, value in item:
+                    if key == 'commonName':
+                        cn = value
                     subject_parts.append(f"{key}={value}")
-            cert_info['subject'] = ', '.join(subject_parts)
+            cert_info['subject'] = cn if cn else ', '.join(subject_parts)
         
         if 'issuer' in cert:
-            # Extract issuer
+            # Extract issuer - find CN (Common Name) first  
             issuer_parts = []
+            cn = None
             for item in cert['issuer']:
                 for key, value in item:
+                    if key == 'commonName':
+                        cn = value
                     issuer_parts.append(f"{key}={value}")
-            cert_info['issuer'] = ', '.join(issuer_parts)
+            cert_info['issuer'] = cn if cn else ', '.join(issuer_parts)
         
         if 'notBefore' in cert:
             try:
@@ -401,10 +472,146 @@ class SSLScanner:
         
         return cert_info
     
+    def _get_cipher_suites_for_protocol(self, protocol: str) -> List[Dict]:
+        """Get list of cipher suites to test for a specific protocol"""
+        if protocol == 'TLSv1.3':
+            return [
+                {'name': 'TLS_AES_128_GCM_SHA256', 'openssl_name': 'TLS_AES_128_GCM_SHA256'},
+                {'name': 'TLS_AES_256_GCM_SHA384', 'openssl_name': 'TLS_AES_256_GCM_SHA384'},
+                {'name': 'TLS_CHACHA20_POLY1305_SHA256', 'openssl_name': 'TLS_CHACHA20_POLY1305_SHA256'},
+            ]
+        elif protocol in ['TLSv1.2', 'TLSv1.1', 'TLSv1']:
+            return [
+                # ECDHE ciphers
+                {'name': 'ECDHE-RSA-CHACHA20-POLY1305', 'openssl_name': 'ECDHE-RSA-CHACHA20-POLY1305'},
+                {'name': 'ECDHE-RSA-AES128-GCM-SHA256', 'openssl_name': 'ECDHE-RSA-AES128-GCM-SHA256'},
+                {'name': 'ECDHE-RSA-AES256-GCM-SHA384', 'openssl_name': 'ECDHE-RSA-AES256-GCM-SHA384'},
+                {'name': 'ECDHE-RSA-AES128-SHA256', 'openssl_name': 'ECDHE-RSA-AES128-SHA256'},
+                {'name': 'ECDHE-RSA-AES256-SHA384', 'openssl_name': 'ECDHE-RSA-AES256-SHA384'},
+                {'name': 'ECDHE-RSA-AES128-SHA', 'openssl_name': 'ECDHE-RSA-AES128-SHA'},
+                {'name': 'ECDHE-RSA-AES256-SHA', 'openssl_name': 'ECDHE-RSA-AES256-SHA'},
+                
+                # RSA ciphers
+                {'name': 'AES128-GCM-SHA256', 'openssl_name': 'AES128-GCM-SHA256'},
+                {'name': 'AES256-GCM-SHA384', 'openssl_name': 'AES256-GCM-SHA384'},
+                {'name': 'AES128-SHA256', 'openssl_name': 'AES128-SHA256'},
+                {'name': 'AES256-SHA256', 'openssl_name': 'AES256-SHA256'},
+                {'name': 'AES128-SHA', 'openssl_name': 'AES128-SHA'},
+                {'name': 'AES256-SHA', 'openssl_name': 'AES256-SHA'},
+                
+                # Weak/deprecated ciphers
+                {'name': 'TLS_RSA_WITH_3DES_EDE_CBC_SHA', 'openssl_name': 'DES-CBC3-SHA'},
+                {'name': 'RC4-SHA', 'openssl_name': 'RC4-SHA'},
+                {'name': 'RC4-MD5', 'openssl_name': 'RC4-MD5'},
+            ]
+        elif protocol == 'SSLv3':
+            return [
+                # SSLv3 typical ciphers
+                {'name': 'AES128-SHA', 'openssl_name': 'AES128-SHA'},
+                {'name': 'AES256-SHA', 'openssl_name': 'AES256-SHA'},
+                {'name': 'DES-CBC3-SHA', 'openssl_name': 'DES-CBC3-SHA'},
+                {'name': 'RC4-SHA', 'openssl_name': 'RC4-SHA'},
+                {'name': 'RC4-MD5', 'openssl_name': 'RC4-MD5'},
+                {'name': 'DES-CBC-SHA', 'openssl_name': 'DES-CBC-SHA'},
+            ]
+        elif protocol == 'SSLv2':
+            return [
+                # SSLv2 typical ciphers (mostly weak by design)
+                {'name': 'RC4-MD5', 'openssl_name': 'RC4-MD5'},
+                {'name': 'RC2-CBC-MD5', 'openssl_name': 'RC2-CBC-MD5'},
+                {'name': 'DES-CBC-MD5', 'openssl_name': 'DES-CBC-MD5'},
+                {'name': 'EXP-RC4-MD5', 'openssl_name': 'EXP-RC4-MD5'},
+                {'name': 'EXP-RC2-CBC-MD5', 'openssl_name': 'EXP-RC2-CBC-MD5'},
+            ]
+        return []
+
+    
+    
+    def _test_sslv2(self, hostname: str, timeout: int = 10) -> bool:
+        """
+        Test for SSLv2 support using raw socket approach
+        SSLv2 is not supported by Python's ssl module, so we use a basic probe
+        """
+        try:
+            import struct
+            
+            # SSLv2 Client Hello message structure
+            # This is a simplified SSLv2 hello message
+            sslv2_hello = bytes([
+                0x80, 0x2e,  # Message length (46 bytes)
+                0x01,        # Message type (CLIENT-HELLO)
+                0x00, 0x02,  # SSL version (SSLv2)
+                0x00, 0x15,  # Cipher specs length (21 bytes) 
+                0x00, 0x00,  # Session ID length (0)
+                0x00, 0x10,  # Challenge length (16 bytes)
+                # Cipher specs (common SSLv2 ciphers)
+                0x01, 0x00, 0x80,  # SSL_CK_RC4_128_WITH_MD5
+                0x02, 0x00, 0x80,  # SSL_CK_RC4_128_EXPORT40_WITH_MD5  
+                0x03, 0x00, 0x80,  # SSL_CK_RC2_128_CBC_WITH_MD5
+                0x04, 0x00, 0x80,  # SSL_CK_RC2_128_CBC_EXPORT40_WITH_MD5
+                0x05, 0x00, 0x80,  # SSL_CK_IDEA_128_CBC_WITH_MD5
+                0x06, 0x00, 0x40,  # SSL_CK_DES_64_CBC_WITH_MD5
+                0x07, 0x00, 0xc0,  # SSL_CK_DES_192_EDE3_CBC_WITH_MD5
+                # Challenge (16 random bytes)
+                0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+                0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10
+            ])
+            
+            with socket.create_connection((hostname, 443), timeout=timeout) as sock:
+                sock.send(sslv2_hello)
+                
+                # Try to read response
+                response = sock.recv(1024)
+                
+                # Check if we got an SSLv2 server hello response
+                if len(response) >= 3:
+                    # SSLv2 server hello starts with 0x04 (SERVER-HELLO) after length
+                    if len(response) >= 3 and response[2] == 0x04:
+                        logger.info(f"{hostname}: SSLv2 supported (got server hello)")
+                        return True
+                    # Also check for specific SSLv2 response patterns
+                    elif b'\x00\x02' in response[:10]:  # SSLv2 version in response
+                        logger.info(f"{hostname}: SSLv2 supported (version detected)")
+                        return True
+                
+                return False
+                
+        except Exception as e:
+            logger.debug(f"{hostname}: SSLv2 test error: {e}")
+            return False
+
     def _is_weak_cipher(self, cipher_name: str) -> bool:
         """Check if cipher is considered weak"""
-        weak_indicators = ['3DES', 'DES', 'RC4', 'MD5', 'NULL', 'EXPORT']
-        return any(weak in cipher_name.upper() for weak in weak_indicators)
+        weak_indicators = [
+            '3DES', 'DES', 'RC4', 'MD5', 'NULL', 'EXPORT',  # Original weak ciphers
+            'ADH', 'AECDH',  # Anonymous DH
+            'PSK',  # Pre-shared key
+            'SRP',  # Secure Remote Password
+            'SEED', 'CAMELLIA',  # Less secure algorithms
+            'CBC3',  # Triple DES in CBC mode
+            'SHA1',  # Weak hash (when used in older contexts)
+        ]
+        
+        cipher_upper = cipher_name.upper()
+        
+        # Check for weak indicators
+        if any(weak in cipher_upper for weak in weak_indicators):
+            return True
+            
+        # Check for low key sizes (if specified in name)
+        if any(size in cipher_upper for size in ['40', '56', '64']):
+            return True
+            
+        # Check for deprecated/weak cipher suites
+        weak_suites = [
+            'TLS_RSA_WITH_3DES_EDE_CBC_SHA',
+            'TLS_RSA_WITH_RC4_128_SHA',
+            'TLS_RSA_WITH_RC4_128_MD5',
+            'SSL_RSA_WITH_RC4_128_SHA',
+            'SSL_RSA_WITH_3DES_EDE_CBC_SHA'
+        ]
+        
+        return cipher_name in weak_suites
     
     def check_deprecated_protocols(self, scan_result: Dict) -> bool:
         """Check if domain uses deprecated protocols"""
@@ -423,3 +630,4 @@ class SSLScanner:
             return 0
         
         return sum(1 for cipher in scan_result['ciphers'] if cipher.get('is_weak', False))
+

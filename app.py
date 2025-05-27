@@ -1,3 +1,4 @@
+
 import os
 import logging
 from flask import Flask
@@ -28,10 +29,27 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 # Initialize the app with the extension
 db.init_app(app)
 
-with app.app_context():
-    # Import models to ensure tables are created
-    import models  # noqa: F401
-    db.create_all()
+# Add custom Jinja2 filters
+import json
 
-# Import routes after app is configured
-import routes  # noqa: F401
+@app.template_filter('from_json')
+def from_json_filter(value):
+    """Parse JSON string to Python object"""
+    try:
+        return json.loads(value) if value else []
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+def create_tables():
+    with app.app_context():
+        # Import models to ensure tables are created
+        import models  # noqa: F401
+        db.create_all()
+
+def register_routes():
+    # Import routes after app is configured
+    import routes  # noqa: F401
+
+# Initialize everything
+create_tables()
+register_routes()

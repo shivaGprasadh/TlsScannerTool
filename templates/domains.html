@@ -55,10 +55,16 @@
                     <i data-feather="list" class="me-2"></i>
                     Domain List
                 </h5>
-                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#bulkAddModal">
-                    <i data-feather="upload" class="me-2"></i>
-                    Bulk Add
-                </button>
+                <div class="btn-group" role="group">
+                    <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#bulkAddModal">
+                        <i data-feather="upload" class="me-2"></i>
+                        Bulk Add
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="confirmDeleteAll()">
+                        <i data-feather="trash-2" class="me-2"></i>
+                        Delete All
+                    </button>
+                </div>
             </div>
             <div class="card-body">
                 {% if domains.items %}
@@ -254,6 +260,14 @@ function confirmDelete(hostname, domainId) {
     if (confirm(`Are you sure you want to delete ${hostname}? This will also delete all scan results for this domain.`)) {
         const form = document.getElementById('deleteForm');
         form.action = `/domains/${domainId}/delete`;
+        form.submit();
+    }
+}
+
+function confirmDeleteAll() {
+    if (confirm('Are you sure you want to delete ALL domains? This will permanently delete all domains and their scan results. This action cannot be undone.')) {
+        const form = document.getElementById('deleteForm');
+        form.action = '/domains/delete_all';
         form.submit();
     }
 }

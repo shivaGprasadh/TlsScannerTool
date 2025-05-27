@@ -136,6 +136,28 @@ def delete_domain(domain_id):
     flash(f'Domain {domain.hostname} deleted', 'success')
     return redirect(url_for('domains'))
 
+@app.route('/domains/delete_all', methods=['POST'])
+def delete_all_domains():
+    """Soft delete all domains"""
+    try:
+        # Get count of active domains before deletion
+        active_count = Domain.query.filter_by(active=True).count()
+        
+        if active_count == 0:
+            flash('No active domains to delete', 'warning')
+            return redirect(url_for('domains'))
+        
+        # Set all active domains to inactive
+        Domain.query.filter_by(active=True).update({'active': False})
+        db.session.commit()
+        
+        flash(f'Successfully deleted {active_count} domains', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting domains: {str(e)}', 'error')
+    
+    return redirect(url_for('domains'))
+
 @app.route('/scan/single/<int:domain_id>')
 def scan_single_domain(domain_id):
     """Scan a single domain"""
