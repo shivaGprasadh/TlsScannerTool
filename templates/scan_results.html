@@ -1,0 +1,388 @@
+{% extends "base.html" %}
+
+{% block title %}Scan Results - SSL/TLS Security Scanner{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i data-feather="search" class="me-2"></i>
+                Scan Results
+            </h1>
+            <div class="btn-group">
+                <a href="{{ url_for('scan_bulk') }}" class="btn btn-primary">
+                    <i data-feather="play-circle" class="me-2"></i>
+                    Start Bulk Scan
+                </a>
+                <a href="{{ url_for('export_summary') }}" class="btn btn-success">
+                    <i data-feather="download" class="me-2"></i>
+                    Export CSV
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scan Progress -->
+{% if current_job %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-primary">
+            <div class="card-header bg-primary">
+                <h5 class="mb-0 text-white">
+                    <i data-feather="activity" class="me-2"></i>
+                    Scanning in Progress
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="progress mb-3" style="height: 25px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" 
+                         style="width: {{ current_job.progress_percentage }}%"
+                         id="scanProgress">
+                        {{ "%.1f"|format(current_job.progress_percentage) }}%
+                    </div>
+                </div>
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <h4 id="completedCount">{{ current_job.completed_domains }}</h4>
+                        <small class="text-muted">Completed</small>
+                    </div>
+                    <div class="col-md-3">
+                        <h4>{{ current_job.total_domains }}</h4>
+                        <small class="text-muted">Total</small>
+                    </div>
+                    <div class="col-md-3">
+                        <h4 id="failedCount">{{ current_job.failed_domains }}</h4>
+                        <small class="text-muted">Failed</small>
+                    </div>
+                    <div class="col-md-3">
+                        <h4 id="remainingCount">{{ current_job.total_domains - current_job.completed_domains - current_job.failed_domains }}</h4>
+                        <small class="text-muted">Remaining</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Filters -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i data-feather="filter" class="me-2"></i>
+                    Filters
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" class="row g-3">
+                    <div class="col-md-4">
+                        <label for="grade" class="form-label">Security Grade</label>
+                        <select class="form-select" id="grade" name="grade">
+                            <option value="">All Grades</option>
+                            <option value="A+" {{ 'selected' if grade_filter == 'A+' }}>A+</option>
+                            <option value="A" {{ 'selected' if grade_filter == 'A' }}>A</option>
+                            <option value="B" {{ 'selected' if grade_filter == 'B' }}>B</option>
+                            <option value="C" {{ 'selected' if grade_filter == 'C' }}>C</option>
+                            <option value="D" {{ 'selected' if grade_filter == 'D' }}>D</option>
+                            <option value="F" {{ 'selected' if grade_filter == 'F' }}>F</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="deprecated" class="form-label">Deprecated Protocols</label>
+                        <select class="form-select" id="deprecated" name="deprecated">
+                            <option value="">All</option>
+                            <option value="true" {{ 'selected' if deprecated_filter == 'true' }}>Has Deprecated</option>
+                            <option value="false" {{ 'selected' if deprecated_filter == 'false' }}>No Deprecated</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary me-2">
+                            <i data-feather="search" class="me-1"></i>
+                            Apply Filters
+                        </button>
+                        <a href="{{ url_for('scan_results') }}" class="btn btn-outline-secondary">
+                            <i data-feather="x" class="me-1"></i>
+                            Clear
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Results Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i data-feather="list" class="me-2"></i>
+                    Scan Results ({{ results.total }} total)
+                </h5>
+                <small class="text-muted">
+                    Showing {{ results.per_page * (results.page - 1) + 1 }} to 
+                    {{ results.per_page * (results.page - 1) + results.items|length }} of {{ results.total }}
+                </small>
+            </div>
+            <div class="card-body">
+                {% if results.items %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Domain</th>
+                                <th>Scan Date</th>
+                                <th>Grade</th>
+                                <th>Score</th>
+                                <th>Protocols</th>
+                                <th>Vulnerabilities</th>
+                                <th>Certificate</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for scan in results.items %}
+                            <tr class="{{ 'table-danger' if not scan.scan_successful else '' }}">
+                                <td>
+                                    <a href="{{ url_for('domain_detail', domain_id=scan.domain.id) }}" class="text-decoration-none">
+                                        <strong>{{ scan.domain.hostname }}</strong>
+                                    </a>
+                                    {% if not scan.scan_successful %}
+                                        <br><small class="text-danger">
+                                            <i data-feather="alert-circle" width="12" height="12"></i>
+                                            Scan failed
+                                        </small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <small>{{ scan.scan_date.strftime('%Y-%m-%d %H:%M') if scan.scan_date else 'N/A' }}</small>
+                                </td>
+                                <td>
+                                    {% if scan.scan_successful and scan.security_grade %}
+                                        <span class="badge bg-{{ 'success' if scan.security_grade in ['A+', 'A'] else 'warning' if scan.security_grade == 'B' else 'danger' }}">
+                                            {{ scan.security_grade }}
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if scan.scan_successful and scan.security_score %}
+                                        {{ "%.1f"|format(scan.security_score) }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if scan.scan_successful %}
+                                        <div class="protocol-badges">
+                                            {% if scan.tlsv1_3_enabled %}
+                                                <span class="badge bg-success">TLS 1.3</span>
+                                            {% endif %}
+                                            {% if scan.tlsv1_2_enabled %}
+                                                <span class="badge bg-success">TLS 1.2</span>
+                                            {% endif %}
+                                            {% if scan.tlsv1_1_enabled %}
+                                                <span class="badge bg-warning">TLS 1.1</span>
+                                            {% endif %}
+                                            {% if scan.tlsv1_0_enabled %}
+                                                <span class="badge bg-warning">TLS 1.0</span>
+                                            {% endif %}
+                                            {% if scan.sslv3_enabled %}
+                                                <span class="badge bg-danger">SSL 3.0</span>
+                                            {% endif %}
+                                            {% if scan.sslv2_enabled %}
+                                                <span class="badge bg-danger">SSL 2.0</span>
+                                            {% endif %}
+                                        </div>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if scan.scan_successful %}
+                                        <div class="vulnerability-indicators">
+                                            {% if scan.heartbleed_vulnerable %}
+                                                <span class="badge bg-danger" title="Heartbleed Vulnerable">
+                                                    <i data-feather="heart" width="12" height="12"></i>
+                                                </span>
+                                            {% endif %}
+                                            {% if scan.weak_ciphers_count > 0 %}
+                                                <span class="badge bg-warning" title="{{ scan.weak_ciphers_count }} weak ciphers">
+                                                    <i data-feather="key" width="12" height="12"></i>
+                                                    {{ scan.weak_ciphers_count }}
+                                                </span>
+                                            {% endif %}
+                                            {% if not scan.secure_renegotiation %}
+                                                <span class="badge bg-warning" title="Insecure renegotiation">
+                                                    <i data-feather="refresh-cw" width="12" height="12"></i>
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if scan.scan_successful and scan.cert_not_after %}
+                                        {% set days_until_expiry = (scan.cert_not_after - scan.scan_date).days %}
+                                        {% if days_until_expiry < 30 %}
+                                            <span class="badge bg-danger" title="Expires {{ scan.cert_not_after.strftime('%Y-%m-%d') }}">
+                                                <i data-feather="alert-triangle" width="12" height="12"></i>
+                                                {{ days_until_expiry }}d
+                                            </span>
+                                        {% elif days_until_expiry < 90 %}
+                                            <span class="badge bg-warning" title="Expires {{ scan.cert_not_after.strftime('%Y-%m-%d') }}">
+                                                <i data-feather="clock" width="12" height="12"></i>
+                                                {{ days_until_expiry }}d
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-success" title="Expires {{ scan.cert_not_after.strftime('%Y-%m-%d') }}">
+                                                <i data-feather="check-circle" width="12" height="12"></i>
+                                                Valid
+                                            </span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <a href="{{ url_for('domain_detail', domain_id=scan.domain.id) }}" 
+                                           class="btn btn-sm btn-outline-info">
+                                            <i data-feather="eye" width="12" height="12"></i>
+                                            View
+                                        </a>
+                                        <a href="{{ url_for('scan_single_domain', domain_id=scan.domain.id) }}" 
+                                           class="btn btn-sm btn-outline-primary">
+                                            <i data-feather="refresh-cw" width="12" height="12"></i>
+                                            Rescan
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                {% if results.pages > 1 %}
+                <nav aria-label="Results pagination" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        {% if results.has_prev %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('scan_results', page=results.prev_num, grade=grade_filter, deprecated=deprecated_filter) }}">
+                                    <i data-feather="chevron-left" width="16" height="16"></i>
+                                    Previous
+                                </a>
+                            </li>
+                        {% endif %}
+                        
+                        {% for page_num in results.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                            {% if page_num %}
+                                {% if page_num != results.page %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('scan_results', page=page_num, grade=grade_filter, deprecated=deprecated_filter) }}">{{ page_num }}</a>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ page_num }}</span>
+                                    </li>
+                                {% endif %}
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if results.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('scan_results', page=results.next_num, grade=grade_filter, deprecated=deprecated_filter) }}">
+                                    Next
+                                    <i data-feather="chevron-right" width="16" height="16"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+
+                {% else %}
+                <div class="text-center py-5">
+                    <i data-feather="search" width="64" height="64" class="text-muted mb-3"></i>
+                    <h4 class="text-muted">No scan results found</h4>
+                    {% if grade_filter or deprecated_filter %}
+                        <p class="text-muted">No results match your current filters.</p>
+                        <a href="{{ url_for('scan_results') }}" class="btn btn-secondary">
+                            <i data-feather="x" class="me-2"></i>
+                            Clear Filters
+                        </a>
+                    {% else %}
+                        <p class="text-muted">Start by scanning some domains to see results here.</p>
+                        <a href="{{ url_for('scan_bulk') }}" class="btn btn-primary">
+                            <i data-feather="play-circle" class="me-2"></i>
+                            Start Bulk Scan
+                        </a>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-refresh scan progress if scanning is in progress
+{% if current_job %}
+function updateScanProgress() {
+    fetch('/api/scan_status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'running') {
+                const progressBar = document.getElementById('scanProgress');
+                const completedCount = document.getElementById('completedCount');
+                const failedCount = document.getElementById('failedCount');
+                const remainingCount = document.getElementById('remainingCount');
+                
+                if (progressBar) {
+                    progressBar.style.width = data.progress + '%';
+                    progressBar.textContent = data.progress.toFixed(1) + '%';
+                }
+                if (completedCount) {
+                    completedCount.textContent = data.completed;
+                }
+                if (failedCount) {
+                    failedCount.textContent = data.failed;
+                }
+                if (remainingCount) {
+                    remainingCount.textContent = data.total - data.completed - data.failed;
+                }
+                
+                // Continue polling if still running
+                setTimeout(updateScanProgress, 2000);
+            } else {
+                // Scan completed, reload page
+                location.reload();
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching scan status:', error);
+            setTimeout(updateScanProgress, 5000);
+        });
+}
+
+// Start polling for updates
+setTimeout(updateScanProgress, 2000);
+{% endif %}
+</script>
+{% endblock %}

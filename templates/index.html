@@ -1,0 +1,385 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - SSL/TLS Security Scanner{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i data-feather="shield" class="me-2"></i>
+            SSL/TLS Security Dashboard
+        </h1>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card bg-primary">
+            <div class="card-body text-center">
+                <h2 class="card-title">{{ total_domains }}</h2>
+                <p class="card-text">Total Domains</p>
+                <i data-feather="globe" class="card-icon"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card bg-info">
+            <div class="card-body text-center">
+                <h2 class="card-title">{{ scanned_domains }}</h2>
+                <p class="card-text">Scanned Domains</p>
+                <i data-feather="search" class="card-icon"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card bg-warning">
+            <div class="card-body text-center">
+                <h2 class="card-title">{{ deprecated_count }}</h2>
+                <p class="card-text">Deprecated Protocols</p>
+                <i data-feather="alert-triangle" class="card-icon"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card bg-success">
+            <div class="card-body text-center">
+                <h2 class="card-title">{{ grade_counts.get('A+', 0) + grade_counts.get('A', 0) }}</h2>
+                <p class="card-text">Grade A Domains</p>
+                <i data-feather="award" class="card-icon"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scan Progress -->
+{% if current_job %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i data-feather="activity" class="me-2"></i>
+                    Scanning in Progress
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="progress mb-3">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" 
+                         style="width: {{ current_job.progress_percentage }}%"
+                         id="scanProgress">
+                        {{ "%.1f"|format(current_job.progress_percentage) }}%
+                    </div>
+                </div>
+                <div class="row text-center">
+                    <div class="col-md-4">
+                        <strong id="completedCount">{{ current_job.completed_domains }}</strong>
+                        <div class="text-muted">Completed</div>
+                    </div>
+                    <div class="col-md-4">
+                        <strong>{{ current_job.total_domains }}</strong>
+                        <div class="text-muted">Total</div>
+                    </div>
+                    <div class="col-md-4">
+                        <strong id="failedCount">{{ current_job.failed_domains }}</strong>
+                        <div class="text-muted">Failed</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Actions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i data-feather="zap" class="me-2"></i>
+                    Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <a href="{{ url_for('scan_bulk') }}" class="btn btn-primary w-100" 
+                           {% if current_job %}onclick="return confirm('A scan is already running. Are you sure you want to start another?')"{% endif %}>
+                            <i data-feather="play-circle" class="me-2"></i>
+                            Scan All Domains
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="{{ url_for('domains') }}" class="btn btn-secondary w-100">
+                            <i data-feather="plus-circle" class="me-2"></i>
+                            Manage Domains
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="{{ url_for('export_summary') }}" class="btn btn-success w-100">
+                            <i data-feather="download" class="me-2"></i>
+                            Export Summary
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="{{ url_for('export_detailed') }}" class="btn btn-info w-100">
+                            <i data-feather="file-text" class="me-2"></i>
+                            Export Detailed
+                        </a>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <form method="POST" action="{{ url_for('clear_all_scans') }}" onsubmit="return confirm('Are you sure you want to clear all scan results? This action cannot be undone.')">
+                            <button type="submit" class="btn btn-warning w-100">
+                                <i data-feather="trash-2" class="me-2"></i>
+                                Remove All Scan Results
+                            </button>
+                        </form>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <a href="{{ url_for('scan_results') }}" class="btn btn-outline-primary w-100">
+                            <i data-feather="list" class="me-2"></i>
+                            View All Results
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Security Grade Distribution -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i data-feather="bar-chart-2" class="me-2"></i>
+                    Security Grade Distribution
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="gradeChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i data-feather="list" class="me-2"></i>
+                    Grade Summary
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Grade</th>
+                                <th>Count</th>
+                                <th>Percentage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for grade, count in grade_counts.items() %}
+                            <tr>
+                                <td>
+                                    <span class="badge bg-{{ 'success' if grade in ['A+', 'A'] else 'warning' if grade == 'B' else 'danger' }}">
+                                        {{ grade }}
+                                    </span>
+                                </td>
+                                <td>{{ count }}</td>
+                                <td>
+                                    {% if scanned_domains > 0 %}
+                                        {{ "%.1f"|format((count / scanned_domains) * 100) }}%
+                                    {% else %}
+                                        0%
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Scan Results -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i data-feather="clock" class="me-2"></i>
+                    Recent Scan Results
+                </h5>
+                <a href="{{ url_for('scan_results') }}" class="btn btn-sm btn-outline-primary">
+                    View All
+                    <i data-feather="arrow-right" class="ms-1"></i>
+                </a>
+            </div>
+            <div class="card-body">
+                {% if latest_scans %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Domain</th>
+                                <th>Scan Date</th>
+                                <th>Grade</th>
+                                <th>Score</th>
+                                <th>Deprecated Protocols</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for scan in latest_scans %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('domain_detail', domain_id=scan.domain.id) }}" class="text-decoration-none">
+                                        {{ scan.domain.hostname }}
+                                    </a>
+                                </td>
+                                <td>{{ scan.scan_date.strftime('%Y-%m-%d %H:%M') if scan.scan_date else 'N/A' }}</td>
+                                <td>
+                                    {% if scan.security_grade %}
+                                        <span class="badge bg-{{ 'success' if scan.security_grade in ['A+', 'A'] else 'warning' if scan.security_grade == 'B' else 'danger' }}">
+                                            {{ scan.security_grade }}
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if scan.security_score %}
+                                        {{ "%.1f"|format(scan.security_score) }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if scan.has_deprecated_protocols %}
+                                        <span class="badge bg-danger">
+                                            <i data-feather="alert-triangle" width="12" height="12"></i>
+                                            Yes
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-success">
+                                            <i data-feather="check" width="12" height="12"></i>
+                                            No
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('domain_detail', domain_id=scan.domain.id) }}" class="btn btn-sm btn-outline-info">
+                                        <i data-feather="eye" width="12" height="12"></i>
+                                        View
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i data-feather="inbox" width="48" height="48" class="text-muted mb-3"></i>
+                    <p class="text-muted">No scan results available. Start by scanning some domains.</p>
+                    <a href="{{ url_for('scan_bulk') }}" class="btn btn-primary">
+                        <i data-feather="play-circle" class="me-2"></i>
+                        Start Scanning
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Grade distribution chart
+const gradeData = {{ grade_counts | tojson }};
+const gradeLabels = Object.keys(gradeData);
+const gradeValues = Object.values(gradeData);
+
+const ctx = document.getElementById('gradeChart').getContext('2d');
+new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+        labels: gradeLabels,
+        datasets: [{
+            data: gradeValues,
+            backgroundColor: [
+                '#198754', // A+ - success
+                '#20c997', // A - success light
+                '#ffc107', // B - warning
+                '#fd7e14', // C - warning dark
+                '#dc3545', // D - danger
+                '#6f42c1', // F - danger dark
+                '#6c757d'  // Not Scanned - secondary
+            ]
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom'
+            }
+        }
+    }
+});
+
+// Auto-refresh scan progress if scanning is in progress
+{% if current_job %}
+function updateScanProgress() {
+    fetch('/api/scan_status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'running') {
+                const progressBar = document.getElementById('scanProgress');
+                const completedCount = document.getElementById('completedCount');
+                const failedCount = document.getElementById('failedCount');
+                
+                if (progressBar) {
+                    progressBar.style.width = data.progress + '%';
+                    progressBar.textContent = data.progress.toFixed(1) + '%';
+                }
+                if (completedCount) {
+                    completedCount.textContent = data.completed;
+                }
+                if (failedCount) {
+                    failedCount.textContent = data.failed;
+                }
+                
+                // Continue polling if still running
+                setTimeout(updateScanProgress, 2000);
+            } else {
+                // Scan completed, reload page
+                location.reload();
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching scan status:', error);
+            setTimeout(updateScanProgress, 5000);
+        });
+}
+
+// Start polling for updates
+setTimeout(updateScanProgress, 2000);
+{% endif %}
+</script>
+{% endblock %}

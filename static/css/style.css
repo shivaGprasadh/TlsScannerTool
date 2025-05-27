@@ -1,0 +1,246 @@
+/* Custom styles for SSL Scanner */
+
+/* Custom card styling */
+.card-icon {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    opacity: 0.1;
+    width: 3rem;
+    height: 3rem;
+}
+
+.card {
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    transition: box-shadow 0.15s ease-in-out;
+}
+
+.card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+/* Protocol badges styling */
+.protocol-badges .badge {
+    margin-right: 0.25rem;
+    margin-bottom: 0.25rem;
+}
+
+.vulnerability-indicators .badge {
+    margin-right: 0.25rem;
+}
+
+/* Security grade colors */
+.bg-grade-a {
+    background-color: var(--bs-success) !important;
+}
+
+.bg-grade-b {
+    background-color: var(--bs-warning) !important;
+}
+
+.bg-grade-c {
+    background-color: var(--bs-warning) !important;
+}
+
+.bg-grade-d {
+    background-color: var(--bs-danger) !important;
+}
+
+.bg-grade-f {
+    background-color: var(--bs-danger) !important;
+}
+
+/* Progress bar animation */
+.progress-bar-animated {
+    animation: progress-bar-stripes 1s linear infinite;
+}
+
+/* Table row highlighting */
+.table-hover tbody tr:hover {
+    background-color: rgba(var(--bs-primary-rgb), 0.075);
+}
+
+/* Security status indicators */
+.security-status-secure {
+    color: var(--bs-success);
+}
+
+.security-status-warning {
+    color: var(--bs-warning);
+}
+
+.security-status-critical {
+    color: var(--bs-danger);
+}
+
+/* Responsive text sizing */
+@media (max-width: 768px) {
+    .card-title {
+        font-size: 1.5rem;
+    }
+    
+    .btn-group .btn {
+        font-size: 0.875rem;
+        padding: 0.25rem 0.5rem;
+    }
+}
+
+/* Custom spacing */
+.protocol-list .d-flex,
+.security-features .d-flex {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(var(--bs-border-color-rgb), 0.5);
+}
+
+.protocol-list .d-flex:last-child,
+.security-features .d-flex:last-child {
+    border-bottom: none;
+}
+
+/* Loading spinner for scan progress */
+.scan-progress {
+    position: relative;
+}
+
+.scan-progress::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid transparent;
+    border-top: 2px solid var(--bs-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Alert styling */
+.alert {
+    border: none;
+    border-radius: 0.5rem;
+}
+
+/* Footer styling */
+footer {
+    border-top: 1px solid rgba(var(--bs-border-color-rgb), 0.5);
+    background-color: rgba(var(--bs-dark-rgb), 0.05);
+}
+
+/* Navigation improvements */
+.navbar-brand {
+    font-weight: 600;
+}
+
+.nav-link.active {
+    font-weight: 600;
+}
+
+/* Table improvements */
+.table th {
+    border-top: none;
+    font-weight: 600;
+    color: var(--bs-primary);
+}
+
+/* Modal improvements */
+.modal-content {
+    border: none;
+    border-radius: 0.75rem;
+}
+
+.modal-header {
+    border-bottom: 1px solid rgba(var(--bs-border-color-rgb), 0.5);
+}
+
+.modal-footer {
+    border-top: 1px solid rgba(var(--bs-border-color-rgb), 0.5);
+}
+
+/* Form improvements */
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
+}
+
+/* Button improvements */
+.btn {
+    border-radius: 0.375rem;
+    font-weight: 500;
+}
+
+.btn-group .btn {
+    border-radius: 0;
+}
+
+.btn-group .btn:first-child {
+    border-top-left-radius: 0.375rem;
+    border-bottom-left-radius: 0.375rem;
+}
+
+.btn-group .btn:last-child {
+    border-top-right-radius: 0.375rem;
+    border-bottom-right-radius: 0.375rem;
+}
+
+/* Utility classes */
+.text-monospace {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+.border-radius-lg {
+    border-radius: 0.75rem !important;
+}
+
+.shadow-sm {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
+}
+
+.shadow-lg {
+    box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.175) !important;
+}
+
+/* Dark theme adjustments */
+[data-bs-theme="dark"] .card {
+    background-color: rgba(var(--bs-light-rgb), 0.05);
+}
+
+[data-bs-theme="dark"] .table {
+    --bs-table-bg: transparent;
+}
+
+[data-bs-theme="dark"] .table-hover tbody tr:hover {
+    background-color: rgba(var(--bs-light-rgb), 0.075);
+}
+
+[data-bs-theme="dark"] .protocol-list .d-flex,
+[data-bs-theme="dark"] .security-features .d-flex {
+    border-bottom-color: rgba(var(--bs-light-rgb), 0.125);
+}
+
+/* Print styles */
+@media print {
+    .btn,
+    .navbar,
+    .pagination,
+    footer {
+        display: none !important;
+    }
+    
+    .card {
+        border: 1px solid #dee2e6 !important;
+        box-shadow: none !important;
+    }
+    
+    .table {
+        font-size: 0.875rem;
+    }
+}
