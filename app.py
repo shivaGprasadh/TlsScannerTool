@@ -40,16 +40,20 @@ def from_json_filter(value):
     except (json.JSONDecodeError, TypeError):
         return []
 
-def create_tables():
+def create_app():
+    """Application factory function"""
+    # Initialize the database and routes
     with app.app_context():
         # Import models to ensure tables are created
         import models  # noqa: F401
         db.create_all()
 
-def register_routes():
-    # Import routes after app is configured
+    # Import routes to register them
     import routes  # noqa: F401
+    
+    return app
 
-# Initialize everything
-create_tables()
-register_routes()
+if __name__ == '__main__':
+    # Initialize the app by calling create_app() which registers routes
+    app = create_app()
+    app.run(host='0.0.0.0', port=5000, debug=True)

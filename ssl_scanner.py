@@ -36,11 +36,16 @@ class SSLScanParser:
         }
         
         try:
+            # Log first 500 characters of output for debugging
+            logger.debug(f"Parsing sslscan output (first 500 chars): {output[:500]}")
+            
             # Parse SSL/TLS Protocol support
             result['protocols'] = self._parse_protocols(output)
+            logger.debug(f"Parsed protocols: {result['protocols']}")
             
             # Parse supported ciphers
             result['ciphers'] = self._parse_ciphers(output)
+            logger.debug(f"Parsed {len(result['ciphers'])} ciphers")
             
             # Parse certificate information
             result['certificate'] = self._parse_certificate(output)
@@ -68,24 +73,71 @@ class SSLScanParser:
             'tlsv1_3': False
         }
         
-        # Look for protocol section
-        protocol_section = re.search(r'SSL/TLS Protocols:(.*?)(?=\n\s*\n|\n\s*[A-Z])', output, re.DOTALL)
-        if protocol_section:
-            protocol_text = protocol_section.group(1)
+        # Look for protocol section - handle the exact format from macOS sslscan
+        protocol_section_pattern = r'SSL/TLS Protocols:(.*?)(?=\n\s*\n|\n\s*[A-Z][^a-z])'
+        protocol_match = re.search(protocol_section_pattern, output, re.DOTALL | re.IGNORECASE)
+        
+        if protocol_match:
+            protocol_text = protocol_match.group(1)
             
-            # Check each protocol
-            if re.search(r'SSLv2\s+enabled', protocol_text):
-                protocols['sslv2'] = True
-            if re.search(r'SSLv3\s+enabled', protocol_text):
-                protocols['sslv3'] = True
-            if re.search(r'TLSv1\.0\s+enabled', protocol_text):
-                protocols['tlsv1_0'] = True
-            if re.search(r'TLSv1\.1\s+enabled', protocol_text):
-                protocols['tlsv1_1'] = True
-            if re.search(r'TLSv1\.2\s+enabled', protocol_text):
-                protocols['tlsv1_2'] = True
-            if re.search(r'TLSv1\.3\s+enabled', protocol_text):
+            # Parse the specific format: "SSLv2     disabled" or "TLSv1.2   enabled"
+            protocol_lines = protocol_text.strip().split('\n')
+            
+            for line in protocol_lines:
+                line = line.strip()
+                if not line:
+                    continue
+                
+                # Parse lines like "SSLv2     disabled" or "TLSv1.2   enabled"
+                parts = line.split()
+                if len(parts) >= 2:
+                    protocol_name = parts[0].strip()
+                    status = parts[1].strip().lower()
+                    
+                    # Map protocol names to our keys
+                    if protocol_name == 'SSLv2':
+                        protocols['sslv2'] = (status == 'enabled')
+                    elif protocol_name == 'SSLv3':
+                        protocols['sslv3'] = (status == 'enabled')
+                    elif protocol_name == 'TLSv1.0':
+                        protocols['tlsv1_0'] = (status == 'enabled')
+                    elif protocol_name == 'TLSv1.1':
+                        protocols['tlsv1_1'] = (status == 'enabled')
+                    elif protocol_name == 'TLSv1.2':
+                        protocols['tlsv1_2'] = (status == 'enabled')
+                    elif protocol_name == 'TLSv1.3':
+                        protocols['tlsv1_3'] = (status == 'enabled')
+        else:
+            # Fallback: search entire output for protocol mentions
+            # Check for enabled protocols using various patterns
+            protocol_checks = [
+                (r'SSLv2\s+(?:enabled|supported)', 'sslv2'),
+                (r'SSLv3\s+(?:enabled|supported)', 'sslv3'),
+                (r'TLSv1\.0\s+(?:enabled|supported)', 'tlsv1_0'),
+                (r'TLSv1\.1\s+(?:enabled|supported)', 'tlsv1_1'),
+                (r'TLSv1\.2\s+(?:enabled|supported)', 'tlsv1_2'),
+                (r'TLSv1\.3\s+(?:enabled|supported)', 'tlsv1_3')
+            ]
+            
+            for pattern, protocol_key in protocol_checks:
+                if re.search(pattern, output, re.IGNORECASE):
+                    protocols[protocol_key] = True
+        
+        # Additional check: if we find cipher suites for a protocol, that protocol is supported
+        if 'Preferred' in output or 'Accepted' in output:
+            # Look for TLS version mentions with cipher suites
+            if re.search(r'(Preferred|Accepted)\s+TLSv1\.3', output, re.IGNORECASE):
                 protocols['tlsv1_3'] = True
+            if re.search(r'(Preferred|Accepted)\s+TLSv1\.2', output, re.IGNORECASE):
+                protocols['tlsv1_2'] = True
+            if re.search(r'(Preferred|Accepted)\s+TLSv1\.1', output, re.IGNORECASE):
+                protocols['tlsv1_1'] = True
+            if re.search(r'(Preferred|Accepted)\s+TLSv1\.0', output, re.IGNORECASE):
+                protocols['tlsv1_0'] = True
+            if re.search(r'(Preferred|Accepted)\s+SSLv3', output, re.IGNORECASE):
+                protocols['sslv3'] = True
+            if re.search(r'(Preferred|Accepted)\s+SSLv2', output, re.IGNORECASE):
+                protocols['sslv2'] = True
         
         return protocols
     
@@ -93,25 +145,131 @@ class SSLScanParser:
         """Extract supported cipher suites"""
         ciphers = []
         
-        # Look for cipher section
-        cipher_section = re.search(r'Supported Server Cipher\(s\):(.*?)(?=\n\s*\n|\n\s*[A-Z])', output, re.DOTALL)
-        if cipher_section:
-            cipher_text = cipher_section.group(1)
+        # Try multiple patterns to find cipher section
+        cipher_patterns = [
+            r'Supported Server Cipher\(s\):(.*?)(?=\n\s*\n|\n\s*[A-Z]|\Z)',
+            r'Server Ciphers:(.*?)(?=\n\s*\n|\n\s*[A-Z]|\Z)',
+            r'Cipher.*?:(.*)(?=\n\s*\n|\n\s*[A-Z]|\Z)'
+        ]
+        
+        cipher_text = ""
+        for pattern in cipher_patterns:
+            match = re.search(pattern, output, re.DOTALL | re.IGNORECASE)
+            if match:
+                cipher_text = match.group(1)
+                break
+        
+        if cipher_text:
+            # Parse the exact format from macOS sslscan:
+            # "Preferred TLSv1.3  128 bits  TLS_AES_128_GCM_SHA256        Curve 25519 DHE 253"
+            # "Accepted  TLSv1.2  256 bits  ECDHE-RSA-CHACHA20-POLY1305   Curve 25519 DHE 253"
             
-            # Parse each cipher line
-            cipher_lines = re.findall(r'(Preferred|Accepted)\s+(TLSv\d\.\d|\w+)\s+(\d+)\s+bits\s+([^\s]+).*', cipher_text)
+            cipher_lines = cipher_text.strip().split('\n')
             
-            for preference, protocol, bits, cipher_name in cipher_lines:
-                cipher_info = {
-                    'preference': preference,
-                    'protocol': protocol,
-                    'bits': int(bits),
-                    'name': cipher_name,
-                    'is_weak': any(weak in cipher_name for weak in self.weak_ciphers)
-                }
-                ciphers.append(cipher_info)
+            for line in cipher_lines:
+                line = line.strip()
+                if not line:
+                    continue
+                
+                # Try to parse the macOS sslscan format
+                # Pattern: "Preferred/Accepted TLSv1.X  bits bits  CIPHER_NAME  additional_info"
+                match = re.match(r'(Preferred|Accepted)\s+(TLSv\d\.\d|SSLv\d(?:\.\d)?)\s+(\d+)\s+bits\s+([^\s]+)(?:\s+(.*))?', line)
+                
+                if match:
+                    preference = match.group(1)
+                    protocol = match.group(2)
+                    bits = int(match.group(3))
+                    cipher_name = match.group(4)
+                    additional_info = match.group(5) if match.group(5) else ""
+                    
+                    # Determine if cipher is weak
+                    is_weak = self._is_weak_cipher_by_name(cipher_name) or bits < 128
+                    
+                    cipher_info = {
+                        'preference': preference,
+                        'protocol': protocol,
+                        'bits': bits,
+                        'name': cipher_name,
+                        'is_weak': is_weak,
+                        'additional_info': additional_info.strip()
+                    }
+                    ciphers.append(cipher_info)
+                else:
+                    # Try alternative formats for backward compatibility
+                    alt_patterns = [
+                        # Alternative format without "bits"
+                        r'(Preferred|Accepted)\s+(TLSv\d\.\d|SSLv\d(?:\.\d)?)\s+([^\s\n]+)\s+(\d+)(?:\s+([^\n]*))?',
+                        # Compact format
+                        r'(Preferred|Accepted)\s+(TLSv\d\.\d|SSLv\d(?:\.\d)?)\s+([^\s\n]+)(?:\s+([^\n]*))?'
+                    ]
+                    
+                    for pattern in alt_patterns:
+                        alt_match = re.match(pattern, line)
+                        if alt_match:
+                            if len(alt_match.groups()) >= 4:
+                                preference, protocol, cipher_name, bits_or_info = alt_match.groups()[:4]
+                                additional_info = alt_match.group(5) if len(alt_match.groups()) > 4 and alt_match.group(5) else ""
+                                
+                                # Try to extract bits
+                                bits = 0
+                                if bits_or_info and bits_or_info.isdigit():
+                                    bits = int(bits_or_info)
+                                else:
+                                    # Try to find bits in cipher name or additional info
+                                    bits_match = re.search(r'(\d+)', cipher_name + " " + str(bits_or_info or ""))
+                                    if bits_match:
+                                        bits = int(bits_match.group(1))
+                                    else:
+                                        bits = 128  # Default assumption
+                                
+                                # Determine if cipher is weak
+                                is_weak = self._is_weak_cipher_by_name(cipher_name) or bits < 128
+                                
+                                cipher_info = {
+                                    'preference': preference,
+                                    'protocol': protocol,
+                                    'bits': bits,
+                                    'name': cipher_name,
+                                    'is_weak': is_weak,
+                                    'additional_info': additional_info.strip() if additional_info else ""
+                                }
+                                ciphers.append(cipher_info)
+                                break
         
         return ciphers
+    
+    def _is_weak_cipher_by_name(self, cipher_name: str) -> bool:
+        """Check if cipher is considered weak based on name"""
+        weak_indicators = [
+            '3DES', 'DES-', 'RC4', 'MD5', 'NULL', 'EXPORT',  # Original weak ciphers
+            'ADH', 'AECDH',  # Anonymous DH
+            'PSK',  # Pre-shared key (context dependent)
+            'SRP',  # Secure Remote Password
+            'SEED', 'CAMELLIA',  # Less secure algorithms
+            'CBC3',  # Triple DES in CBC mode
+            'TLS_RSA_WITH_3DES_EDE_CBC_SHA',  # Specific weak cipher
+        ]
+        
+        cipher_upper = cipher_name.upper()
+        
+        # Check for weak indicators
+        if any(weak in cipher_upper for weak in weak_indicators):
+            return True
+            
+        # Check for low key sizes (if specified in name)
+        if any(size in cipher_upper for size in ['40', '56', '64']):
+            return True
+            
+        # Check for deprecated/weak cipher suites
+        weak_suites = [
+            'TLS_RSA_WITH_3DES_EDE_CBC_SHA',
+            'TLS_RSA_WITH_RC4_128_SHA',
+            'TLS_RSA_WITH_RC4_128_MD5',
+            'SSL_RSA_WITH_RC4_128_SHA',
+            'SSL_RSA_WITH_3DES_EDE_CBC_SHA'
+        ]
+        
+        return cipher_name in weak_suites
     
     def _parse_certificate(self, output: str) -> Dict:
         """Extract certificate information"""
@@ -142,26 +300,32 @@ class SSLScanParser:
             if issuer_match:
                 cert_info['issuer'] = issuer_match.group(1).strip()
             
-            # Extract validity dates
+            # Extract validity dates - handle the macOS format: "Mar 30 23:35:37 2025 GMT"
             not_before_match = re.search(r'Not valid before:\s*([^\n]+)', cert_text)
             if not_before_match:
+                date_str = not_before_match.group(1).strip()
                 try:
-                    cert_info['not_before'] = datetime.strptime(
-                        not_before_match.group(1).strip(), 
-                        '%b %d %H:%M:%S %Y %Z'
-                    )
+                    # Try the macOS format first: "Mar 30 23:35:37 2025 GMT"
+                    cert_info['not_before'] = datetime.strptime(date_str, '%b %d %H:%M:%S %Y %Z')
                 except ValueError:
-                    cert_info['not_before_raw'] = not_before_match.group(1).strip()
+                    try:
+                        # Try alternative format without timezone
+                        cert_info['not_before'] = datetime.strptime(date_str.replace(' GMT', ''), '%b %d %H:%M:%S %Y')
+                    except ValueError:
+                        cert_info['not_before_raw'] = date_str
             
             not_after_match = re.search(r'Not valid after:\s*([^\n]+)', cert_text)
             if not_after_match:
+                date_str = not_after_match.group(1).strip()
                 try:
-                    cert_info['not_after'] = datetime.strptime(
-                        not_after_match.group(1).strip(), 
-                        '%b %d %H:%M:%S %Y %Z'
-                    )
+                    # Try the macOS format first: "Jun 29 00:30:31 2025 GMT"
+                    cert_info['not_after'] = datetime.strptime(date_str, '%b %d %H:%M:%S %Y %Z')
                 except ValueError:
-                    cert_info['not_after_raw'] = not_after_match.group(1).strip()
+                    try:
+                        # Try alternative format without timezone
+                        cert_info['not_after'] = datetime.strptime(date_str.replace(' GMT', ''), '%b %d %H:%M:%S %Y')
+                    except ValueError:
+                        cert_info['not_after_raw'] = date_str
         
         return cert_info
     
@@ -176,12 +340,16 @@ class SSLScanParser:
             'secure_renegotiation': False
         }
         
-        # Check for TLS Fallback SCSV
-        if 'supports TLS Fallback SCSV' in output:
+        # Check for TLS Fallback SCSV (macOS format)
+        if 'Server supports TLS Fallback SCSV' in output:
+            features['fallback_scsv'] = True
+        elif 'supports TLS Fallback SCSV' in output:
             features['fallback_scsv'] = True
         
-        # Check for secure renegotiation
-        if 'Secure session renegotiation supported' in output:
+        # Check for secure renegotiation (macOS format)
+        if 'Session renegotiation not supported' in output:
+            features['secure_renegotiation'] = False
+        elif 'Session renegotiation supported' in output or 'Secure session renegotiation supported' in output:
             features['secure_renegotiation'] = True
         
         return features
@@ -194,7 +362,7 @@ class SSLScanner:
     
     def scan_domain(self, hostname: str, timeout: int = 30) -> Tuple[bool, Dict]:
         """
-        Scan a single domain using Python SSL libraries
+        Scan a single domain using sslscan command-line tool
         
         Args:
             hostname: The domain to scan
@@ -204,13 +372,21 @@ class SSLScanner:
             Tuple of (success, result_dict)
         """
         try:
-            logger.info(f"Scanning {hostname} with Python SSL scanner")
+            # First try using the actual sslscan command
+            logger.info(f"Scanning {hostname} with sslscan command-line tool")
+            success, result = self._scan_with_sslscan_command(hostname, timeout)
             
-            # Use Python-based SSL scanning
-            result = self._scan_with_python_ssl(hostname, timeout)
-            result['hostname'] = hostname
-            result['scan_successful'] = True
-            return True, result
+            if success:
+                result['hostname'] = hostname
+                result['scan_successful'] = True
+                return True, result
+            else:
+                # Fall back to Python SSL scanning if sslscan is not available
+                logger.warning(f"sslscan command not available, falling back to Python SSL scanner for {hostname}")
+                result = self._scan_with_python_ssl(hostname, timeout)
+                result['hostname'] = hostname
+                result['scan_successful'] = True
+                return True, result
                 
         except Exception as e:
             error_msg = f"Scan error: {str(e)}"
@@ -220,6 +396,45 @@ class SSLScanner:
                 'scan_successful': False,
                 'error_message': error_msg
             }
+    
+    def _scan_with_sslscan_command(self, hostname: str, timeout: int = 30) -> Tuple[bool, Dict]:
+        """
+        Perform SSL scan using the sslscan command-line tool
+        """
+        try:
+            # Run sslscan command
+            cmd = ['sslscan', '--no-colour', hostname]
+            logger.debug(f"Running command: {' '.join(cmd)}")
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False  # Don't raise exception on non-zero exit codes
+            )
+            
+            if result.returncode != 0:
+                logger.error(f"sslscan command failed with return code {result.returncode}")
+                logger.error(f"stderr: {result.stderr}")
+                return False, {}
+            
+            output = result.stdout
+            logger.debug(f"sslscan output length: {len(output)} characters")
+            
+            # Parse the output
+            scan_result = self.parser.parse_sslscan_output(output)
+            return True, scan_result
+            
+        except subprocess.TimeoutExpired:
+            logger.error(f"sslscan command timed out after {timeout} seconds")
+            return False, {}
+        except FileNotFoundError:
+            logger.warning("sslscan command not found")
+            return False, {}
+        except Exception as e:
+            logger.error(f"Error running sslscan command: {e}")
+            return False, {}
     
     def _scan_with_python_ssl(self, hostname: str, timeout: int = 30) -> Dict:
         """
@@ -288,6 +503,10 @@ class SSLScanner:
                         context.set_ciphers('ALL:@SECLEVEL=0')
                         context.minimum_version = ssl.TLSVersion.TLSv1_1
                         context.maximum_version = ssl.TLSVersion.TLSv1_1
+                    except (AttributeError, ValueError):
+                        # TLS 1.1 might not be available or supported
+                        logger.debug(f"{hostname}: TLSv1.1 not available in Python SSL module")
+                        continue
                     except:
                         continue
                 elif protocol_name == 'TLSv1':
@@ -295,13 +514,22 @@ class SSLScanner:
                         context.set_ciphers('ALL:@SECLEVEL=0')
                         context.minimum_version = ssl.TLSVersion.TLSv1
                         context.maximum_version = ssl.TLSVersion.TLSv1
+                    except (AttributeError, ValueError):
+                        # TLS 1.0 might not be available or supported
+                        logger.debug(f"{hostname}: TLSv1.0 not available in Python SSL module")
+                        continue
                     except:
                         continue
                 elif protocol_name == 'SSLv3':
                     try:
+                        # Most Python builds don't support SSLv3 anymore
                         context.set_ciphers('ALL:@SECLEVEL=0')
                         context.minimum_version = ssl.TLSVersion.SSLv3
                         context.maximum_version = ssl.TLSVersion.SSLv3
+                    except AttributeError:
+                        # SSLv3 not available in this Python build
+                        logger.debug(f"{hostname}: SSLv3 not available in Python SSL module")
+                        continue
                     except:
                         continue
                 elif protocol_name == 'SSLv2':
@@ -358,6 +586,8 @@ class SSLScanner:
                                 cipher_context.set_ciphers('ALL:@SECLEVEL=0')
                                 cipher_context.minimum_version = ssl.TLSVersion.TLSv1_1
                                 cipher_context.maximum_version = ssl.TLSVersion.TLSv1_1
+                            except (AttributeError, ValueError):
+                                continue
                             except:
                                 continue
                         elif protocol_name == 'TLSv1':
@@ -365,6 +595,8 @@ class SSLScanner:
                                 cipher_context.set_ciphers('ALL:@SECLEVEL=0')
                                 cipher_context.minimum_version = ssl.TLSVersion.TLSv1
                                 cipher_context.maximum_version = ssl.TLSVersion.TLSv1
+                            except (AttributeError, ValueError):
+                                continue
                             except:
                                 continue
                         elif protocol_name == 'SSLv3':
@@ -372,6 +604,8 @@ class SSLScanner:
                                 cipher_context.set_ciphers('ALL:@SECLEVEL=0')
                                 cipher_context.minimum_version = ssl.TLSVersion.SSLv3
                                 cipher_context.maximum_version = ssl.TLSVersion.SSLv3
+                            except (AttributeError, ValueError):
+                                continue
                             except:
                                 continue
                         elif protocol_name == 'SSLv2':
@@ -563,19 +797,36 @@ class SSLScanner:
                 # Try to read response
                 response = sock.recv(1024)
                 
-                # Check if we got an SSLv2 server hello response
-                if len(response) >= 3:
-                    # SSLv2 server hello starts with 0x04 (SERVER-HELLO) after length
-                    if len(response) >= 3 and response[2] == 0x04:
-                        logger.info(f"{hostname}: SSLv2 supported (got server hello)")
-                        return True
-                    # Also check for specific SSLv2 response patterns
-                    elif b'\x00\x02' in response[:10]:  # SSLv2 version in response
-                        logger.info(f"{hostname}: SSLv2 supported (version detected)")
+                # Modern servers will typically respond with TLS alert or close connection
+                # SSLv2 server hello has very specific format:
+                # - First byte should be high bit set (0x80+) for message length
+                # - Third byte should be 0x04 (SERVER-HELLO)
+                # - Followed by SSLv2 version (0x00, 0x02)
+                if len(response) >= 5:
+                    # Check for proper SSLv2 SERVER-HELLO response
+                    if (response[0] & 0x80) and response[2] == 0x04 and response[3] == 0x00 and response[4] == 0x02:
+                        logger.info(f"{hostname}: SSLv2 supported (valid server hello)")
                         return True
                 
+                # Check for TLS alert responses (which indicate SSLv2 is NOT supported)
+                if len(response) >= 2:
+                    # TLS alert record starts with 0x15 (alert), then version
+                    if response[0] == 0x15:
+                        logger.debug(f"{hostname}: SSLv2 not supported (TLS alert received)")
+                        return False
+                    # TLS handshake failure or protocol version alert
+                    if response[0] == 0x16:  # TLS handshake record
+                        logger.debug(f"{hostname}: SSLv2 not supported (TLS handshake received)")
+                        return False
+                
+                # If we get any other response, SSLv2 is likely not supported
+                logger.debug(f"{hostname}: SSLv2 not supported (unexpected response)")
                 return False
                 
+        except (ConnectionResetError, socket.timeout, OSError) as e:
+            # Connection reset or timeout typically means SSLv2 not supported
+            logger.debug(f"{hostname}: SSLv2 not supported (connection error: {e})")
+            return False
         except Exception as e:
             logger.debug(f"{hostname}: SSLv2 test error: {e}")
             return False
