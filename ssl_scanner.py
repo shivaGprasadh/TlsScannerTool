@@ -145,42 +145,37 @@ class SSLScanParser:
         """Extract supported cipher suites"""
         ciphers = []
         
-        # Try multiple patterns to find cipher section
-        cipher_patterns = [
-            r'Supported Server Cipher\(s\):(.*?)(?=\n\s*\n|\n\s*[A-Z]|\Z)',
-            r'Server Ciphers:(.*?)(?=\n\s*\n|\n\s*[A-Z]|\Z)',
-            r'Cipher.*?:(.*)(?=\n\s*\n|\n\s*[A-Z]|\Z)'
-        ]
+        # Look for the cipher section with the exact format from your sample
+        cipher_pattern = r'Supported Server Cipher\(s\):(.*?)(?=\n\s*\n|\n\s*[A-Z][^a-z]|\Z)'
+        cipher_match = re.search(cipher_pattern, output, re.DOTALL | re.IGNORECASE)
         
-        cipher_text = ""
-        for pattern in cipher_patterns:
-            match = re.search(pattern, output, re.DOTALL | re.IGNORECASE)
-            if match:
-                cipher_text = match.group(1)
-                break
-        
-        if cipher_text:
-            # Parse the exact format from macOS sslscan:
-            # "Preferred TLSv1.3  128 bits  TLS_AES_128_GCM_SHA256        Curve 25519 DHE 253"
-            # "Accepted  TLSv1.2  256 bits  ECDHE-RSA-CHACHA20-POLY1305   Curve 25519 DHE 253"
+        if cipher_match:
+            cipher_text = cipher_match.group(1).strip()
+            logger.debug(f"Found cipher section: {cipher_text[:200]}...")
             
-            cipher_lines = cipher_text.strip().split('\n')
+            # Split into lines and process each cipher line
+            cipher_lines = cipher_text.split('\n')
             
             for line in cipher_lines:
                 line = line.strip()
                 if not line:
                     continue
                 
-                # Try to parse the macOS sslscan format
-                # Pattern: "Preferred/Accepted TLSv1.X  bits bits  CIPHER_NAME  additional_info"
-                match = re.match(r'(Preferred|Accepted)\s+(TLSv\d\.\d|SSLv\d(?:\.\d)?)\s+(\d+)\s+bits\s+([^\s]+)(?:\s+(.*))?', line)
+                # Parse the exact macOS sslscan format:
+                # "Preferred TLSv1.3  128 bits  TLS_AES_128_GCM_SHA256        Curve 25519 DHE 253"
+                # "Accepted  TLSv1.2  256 bits  ECDHE-RSA-CHACHA20-POLY1305   Curve 25519 DHE 253"
+                # "Preferred TLSv1.3  256 bits  TLS_AES_256_GCM_SHA384        Curve P-384 DHE 384"
+                
+                # More flexible regex to handle various cipher name formats and spacing
+                cipher_regex = r'^(Preferred|Accepted)\s+(TLSv\d\.\d|SSLv\d(?:\.\d)?)\s+(\d+)\s+bits\s+([A-Za-z0-9_\-]+)\s*(.*)$'
+                match = re.match(cipher_regex, line)
                 
                 if match:
-                    preference = match.group(1)
-                    protocol = match.group(2)
+                    preference = match.group(1).strip()
+                    protocol = match.group(2).strip()
                     bits = int(match.group(3))
-                    cipher_name = match.group(4)
-                    additional_info = match.group(5) if match.group(5) else ""
+                    cipher_name = match.group(4).strip()
+                    additional_info = match.group(5).strip() if match.group(5) else ""
                     
                     # Determine if cipher is weak
                     is_weak = self._is_weak_cipher_by_name(cipher_name) or bits < 128
@@ -191,70 +186,53 @@ class SSLScanParser:
                         'bits': bits,
                         'name': cipher_name,
                         'is_weak': is_weak,
-                        'additional_info': additional_info.strip()
+                        'additional_info': additional_info
                     }
                     ciphers.append(cipher_info)
+                    logger.debug(f"Successfully parsed cipher: {cipher_info}")
                 else:
-                    # Try alternative formats for backward compatibility
-                    alt_patterns = [
-                        # Alternative format without "bits"
-                        r'(Preferred|Accepted)\s+(TLSv\d\.\d|SSLv\d(?:\.\d)?)\s+([^\s\n]+)\s+(\d+)(?:\s+([^\n]*))?',
-                        # Compact format
-                        r'(Preferred|Accepted)\s+(TLSv\d\.\d|SSLv\d(?:\.\d)?)\s+([^\s\n]+)(?:\s+([^\n]*))?'
-                    ]
-                    
-                    for pattern in alt_patterns:
-                        alt_match = re.match(pattern, line)
-                        if alt_match:
-                            if len(alt_match.groups()) >= 4:
-                                preference, protocol, cipher_name, bits_or_info = alt_match.groups()[:4]
-                                additional_info = alt_match.group(5) if len(alt_match.groups()) > 4 and alt_match.group(5) else ""
-                                
-                                # Try to extract bits
-                                bits = 0
-                                if bits_or_info and bits_or_info.isdigit():
-                                    bits = int(bits_or_info)
-                                else:
-                                    # Try to find bits in cipher name or additional info
-                                    bits_match = re.search(r'(\d+)', cipher_name + " " + str(bits_or_info or ""))
-                                    if bits_match:
-                                        bits = int(bits_match.group(1))
-                                    else:
-                                        bits = 128  # Default assumption
-                                
-                                # Determine if cipher is weak
-                                is_weak = self._is_weak_cipher_by_name(cipher_name) or bits < 128
-                                
-                                cipher_info = {
-                                    'preference': preference,
-                                    'protocol': protocol,
-                                    'bits': bits,
-                                    'name': cipher_name,
-                                    'is_weak': is_weak,
-                                    'additional_info': additional_info.strip() if additional_info else ""
-                                }
-                                ciphers.append(cipher_info)
-                                break
+                    logger.warning(f"Failed to parse cipher line: '{line}'")
+        else:
+            logger.warning("No cipher section found in sslscan output")
         
+        logger.debug(f"Total ciphers parsed: {len(ciphers)}")
         return ciphers
     
     def _is_weak_cipher_by_name(self, cipher_name: str) -> bool:
         """Check if cipher is considered weak based on name"""
-        weak_indicators = [
-            '3DES', 'DES-', 'RC4', 'MD5', 'NULL', 'EXPORT',  # Original weak ciphers
-            'ADH', 'AECDH',  # Anonymous DH
-            'PSK',  # Pre-shared key (context dependent)
-            'SRP',  # Secure Remote Password
-            'SEED', 'CAMELLIA',  # Less secure algorithms
-            'CBC3',  # Triple DES in CBC mode
-            'TLS_RSA_WITH_3DES_EDE_CBC_SHA',  # Specific weak cipher
-        ]
-        
         cipher_upper = cipher_name.upper()
         
-        # Check for weak indicators
-        if any(weak in cipher_upper for weak in weak_indicators):
-            return True
+        # First check for explicitly strong modern ciphers (TLS 1.3 and modern TLS 1.2)
+        strong_ciphers = [
+            'TLS_AES_128_GCM_SHA256',
+            'TLS_AES_256_GCM_SHA384', 
+            'TLS_CHACHA20_POLY1305_SHA256',
+            'ECDHE-RSA-AES128-GCM-SHA256',
+            'ECDHE-RSA-AES256-GCM-SHA384',
+            'ECDHE-RSA-CHACHA20-POLY1305',
+            'ECDHE-RSA-AES128-SHA256',
+            'ECDHE-RSA-AES256-SHA384',
+            'AES128-GCM-SHA256',
+            'AES256-GCM-SHA384',
+            'AES128-SHA256',
+            'AES256-SHA256'
+        ]
+        
+        if cipher_name in strong_ciphers:
+            return False
+        
+        # Check for definitely weak indicators
+        weak_indicators = [
+            '3DES', 'DES-CBC-', 'RC4', 'MD5', 'NULL', 'EXPORT',  # Definitely weak
+            'ADH-', 'AECDH-',  # Anonymous DH (no authentication)
+            'SEED-', 'CAMELLIA-',  # Less common algorithms
+            'CBC3-',  # Triple DES in CBC mode
+        ]
+        
+        # Check for weak indicators (be more specific to avoid false positives)
+        for weak in weak_indicators:
+            if weak in cipher_upper:
+                return True
             
         # Check for low key sizes (if specified in name)
         if any(size in cipher_upper for size in ['40', '56', '64']):
@@ -266,10 +244,25 @@ class SSLScanParser:
             'TLS_RSA_WITH_RC4_128_SHA',
             'TLS_RSA_WITH_RC4_128_MD5',
             'SSL_RSA_WITH_RC4_128_SHA',
-            'SSL_RSA_WITH_3DES_EDE_CBC_SHA'
+            'SSL_RSA_WITH_3DES_EDE_CBC_SHA',
+            'DES-CBC-SHA',
+            'DES-CBC3-SHA',
+            'RC4-SHA',
+            'RC4-MD5'
         ]
         
-        return cipher_name in weak_suites
+        if cipher_name in weak_suites:
+            return True
+        
+        # Check for older AES-SHA combinations (weaker but not necessarily "weak")
+        # Only mark as weak if using SHA-1 without forward secrecy
+        if 'AES' in cipher_upper and 'SHA' in cipher_upper and 'SHA256' not in cipher_upper and 'SHA384' not in cipher_upper:
+            # AES128-SHA, AES256-SHA are older but not critically weak
+            if not cipher_name.startswith('ECDHE-'):
+                return True
+        
+        # Default to not weak for unrecognized modern ciphers
+        return False
     
     def _parse_certificate(self, output: str) -> Dict:
         """Extract certificate information"""

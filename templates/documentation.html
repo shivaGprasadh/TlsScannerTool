@@ -1,0 +1,429 @@
+{% extends "base.html" %}
+
+{% block title %}Documentation - SSL Scanner{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h1 class="h3 mb-0">
+                        <i data-feather="book-open" class="me-2"></i>
+                        SSL Scanner Documentation
+                    </h1>
+                </div>
+                <div class="card-body">
+                    <!-- Table of Contents -->
+                    <div class="alert alert-info">
+                        <h5>Table of Contents</h5>
+                        <ul class="mb-0">
+                            <li><a href="#overview">Overview</a></li>
+                            <li><a href="#installation">Installation</a></li>
+                            <li><a href="#requirements">Requirements</a></li>
+                            <li><a href="#usage">Usage</a></li>
+                            <li><a href="#scoring">Security Scoring System</a></li>
+                            <li><a href="#troubleshooting">Troubleshooting</a></li>
+                        </ul>
+                    </div>
+
+                    <!-- Overview Section -->
+                    <section id="overview" class="mb-5">
+                        <h2 class="border-bottom pb-2">Overview</h2>
+                        <p>SSL Scanner is a web application that analyzes SSL/TLS configurations of domains and provides detailed security reports. It uses the <code>sslscan</code> command-line tool to perform comprehensive SSL/TLS security assessments.</p>
+
+                        <h3>Features</h3>
+                        <ul>
+                            <li>SSL/TLS protocol version detection</li>
+                            <li>Cipher suite enumeration and weakness analysis</li>
+                            <li>Certificate information extraction</li>
+                            <li>Security feature detection (SCSV, renegotiation)</li>
+                            <li>Automated security scoring and grading</li>
+                            <li>Bulk domain scanning</li>
+                            <li>CSV export functionality</li>
+                        </ul>
+                    </section>
+
+                    <!-- Installation Section -->
+                    <section id="installation" class="mb-5">
+                        <h2 class="border-bottom pb-2">Installation</h2>
+
+                        <h3>Linux Installation</h3>
+                        <div class="card bg-dark border-secondary">
+                            <div class="card-body">
+                                <h5 class="text-light">Ubuntu/Debian:</h5>
+                                <pre class="bg-secondary text-light p-3 rounded"><code># Update package manager
+sudo apt update
+
+# Install sslscan
+sudo apt install sslscan
+
+# Install Python dependencies
+sudo apt install python3 python3-pip
+
+# Clone or download the application
+# Navigate to the application directory
+
+# Install Python requirements
+pip3 install -r requirements.txt
+
+# Run the application
+python3 app.py</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="card bg-dark border-secondary mt-3">
+                            <div class="card-body">
+                                <h5 class="text-light">CentOS/RHEL/Fedora:</h5>
+                                <pre class="bg-secondary text-light p-3 rounded"><code># Update package manager
+sudo yum update  # or sudo dnf update for Fedora
+
+# Install sslscan (may need EPEL repository)
+sudo yum install epel-release  # for CentOS/RHEL
+sudo yum install sslscan
+
+# Install Python dependencies
+sudo yum install python3 python3-pip
+
+# Clone or download the application
+# Navigate to the application directory
+
+# Install Python requirements
+pip3 install -r requirements.txt
+
+# Run the application
+python3 app.py</code></pre>
+                            </div>
+                        </div>
+
+                        <h3 class="mt-4">macOS Installation</h3>
+                        <div class="card bg-dark border-secondary">
+                            <div class="card-body">
+                                <h5 class="text-light">Using Homebrew (Recommended):</h5>
+                                <pre class="bg-secondary text-light p-3 rounded"><code># Install Homebrew if not already installed
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install sslscan
+brew install sslscan
+
+# Install Python (if not already installed)
+brew install python3
+
+# Clone or download the application
+# Navigate to the application directory
+
+# Install Python requirements
+pip3 install -r requirements.txt
+
+# Run the application
+python3 app.py</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="card bg-dark border-secondary mt-3">
+                            <div class="card-body">
+                                <h5 class="text-light">Manual Installation:</h5>
+                                <pre class="bg-secondary text-light p-3 rounded"><code># Install sslscan from source
+git clone https://github.com/rbsec/sslscan.git
+cd sslscan
+make static
+sudo make install
+
+# Navigate back to application directory
+# Install Python requirements
+pip3 install -r requirements.txt
+
+# Run the application
+python3 app.py</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-warning mt-3">
+                            <strong>Note:</strong> On macOS, you may need to use <code>python</code> instead of <code>python3</code> depending on your Python installation.
+                        </div>
+                    </section>
+
+                    <!-- Requirements Section -->
+                    <section id="requirements" class="mb-5">
+                        <h2 class="border-bottom pb-2">Requirements</h2>
+
+                        <h3>System Requirements</h3>
+                        <ul>
+                            <li><strong>Operating System:</strong> Linux, macOS, or Windows (with WSL)</li>
+                            <li><strong>Python:</strong> 3.8 or higher</li>
+                            <li><strong>sslscan:</strong> 2.0 or higher</li>
+                            <li><strong>Memory:</strong> 512MB RAM minimum</li>
+                            <li><strong>Storage:</strong> 100MB free space</li>
+                        </ul>
+
+                        <h3>Python Dependencies</h3>
+                        <div class="card bg-dark border-secondary">
+                            <div class="card-body">
+                                <pre class="bg-secondary text-light p-3 rounded"><code>cryptography>=45.0.3
+email-validator>=2.2.0
+flask>=3.1.1
+flask-sqlalchemy>=3.1.1
+gunicorn>=23.0.0
+psycopg2-binary>=2.9.10
+requests>=2.32.3
+sqlalchemy>=2.0.41
+sslscan>=0.5.1
+werkzeug>=3.1.3</code></pre>
+                            </div>
+                        </div>
+
+                        <h3>Database</h3>
+                        <p>The application uses SQLite by default for development. For production, PostgreSQL is recommended and can be configured via the <code>DATABASE_URL</code> environment variable.</p>
+                    </section>
+
+                    <!-- Usage Section -->
+                    <section id="usage" class="mb-5">
+                        <h2 class="border-bottom pb-2">Usage</h2>
+
+                        <h3>Running the Application</h3>
+                        <div class="card bg-dark border-secondary">
+                            <div class="card-body">
+                                <pre class="bg-secondary text-light p-3 rounded"><code># Start the application
+python3 app.py
+
+# Application will be available at:
+# http://localhost:5000</code></pre>
+                            </div>
+                        </div>
+
+                        <h3>Environment Variables</h3>
+                        <ul>
+                            <li><code>DATABASE_URL</code> - Database connection string (optional)</li>
+                            <li><code>SESSION_SECRET</code> - Session secret key for security</li>
+                        </ul>
+
+                        <h3>Basic Workflow</h3>
+                        <ol>
+                            <li>Access the application at <code>http://localhost:5000</code></li>
+                            <li>Add domains using the "Add Domain" feature</li>
+                            <li>Initiate scans manually or use bulk scanning</li>
+                            <li>View detailed scan results and security analysis</li>
+                            <li>Export results as CSV for further analysis</li>
+                        </ol>
+                    </section>
+
+                    <!-- Scoring Section -->
+                    <section id="scoring" class="mb-5">
+                        <h2 class="border-bottom pb-2">Security Scoring System</h2>
+
+                        <p>The SSL Scanner uses a comprehensive scoring algorithm to evaluate SSL/TLS configurations. The scoring starts at 100 points and deducts points based on security issues found.</p>
+
+                        <h3>Scoring Breakdown</h3>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card border-danger">
+                                    <div class="card-header bg-danger text-white">
+                                        <h5 class="mb-0">Major Penalties</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <ul class="mb-0">
+                                            <li><strong>SSLv2 Enabled:</strong> -30 points</li>
+                                            <li><strong>SSLv3 Enabled:</strong> -30 points</li>
+                                            <li><strong>Heartbleed Vulnerable:</strong> -25 points</li>
+                                            <li><strong>TLS 1.0 Enabled:</strong> -20 points</li>
+                                            <li><strong>TLS 1.1 Enabled:</strong> -15 points</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-warning">
+                                    <div class="card-header bg-warning text-dark">
+                                        <h5 class="mb-0">Minor Penalties</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <ul class="mb-0">
+                                            <li><strong>No Secure Renegotiation:</strong> -10 points</li>
+                                            <li><strong>Compression Enabled:</strong> -5 points</li>
+                                            <li><strong>Each Weak Cipher:</strong> -5 points</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <div class="card border-success">
+                                    <div class="card-header bg-success text-white">
+                                        <h5 class="mb-0">Bonus Points</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <ul class="mb-0">
+                                            <li><strong>TLS 1.3 Support:</strong> +5 points</li>
+                                            <li><strong>Fallback SCSV Support:</strong> +5 points</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-info">
+                                    <div class="card-header bg-info text-white">
+                                        <h5 class="mb-0">Grade Scale</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <ul class="mb-0">
+                                            <li><strong>A+:</strong> 95-100 points</li>
+                                            <li><strong>A:</strong> 85-94 points</li>
+                                            <li><strong>B:</strong> 75-84 points</li>
+                                            <li><strong>C:</strong> 65-74 points</li>
+                                            <li><strong>D:</strong> 50-64 points</li>
+                                            <li><strong>F:</strong> 0-49 points</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h3 class="mt-4">Weak Cipher Detection</h3>
+                        <p>Ciphers are considered weak if they contain any of the following characteristics:</p>
+                        <ul>
+                            <li>Use of deprecated algorithms (3DES, RC4, DES)</li>
+                            <li>Weak hash functions (MD5)</li>
+                            <li>Export-grade ciphers (40-bit, 56-bit keys)</li>
+                            <li>Anonymous Diffie-Hellman (no authentication)</li>
+                            <li>NULL encryption or authentication</li>
+                            <li>Low key sizes (&lt; 128 bits)</li>
+                        </ul>
+
+                        <h3>Security Feature Evaluation</h3>
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Feature</th>
+                                        <th>Good</th>
+                                        <th>Bad</th>
+                                        <th>Impact</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>TLS Fallback SCSV</td>
+                                        <td>Supported</td>
+                                        <td>Not Supported</td>
+                                        <td>Protection against downgrade attacks</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Secure Renegotiation</td>
+                                        <td>Supported</td>
+                                        <td>Not Supported</td>
+                                        <td>Protection against renegotiation attacks</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Compression</td>
+                                        <td>Disabled</td>
+                                        <td>Enabled</td>
+                                        <td>Protection against CRIME/BREACH attacks</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Heartbleed</td>
+                                        <td>Not Vulnerable</td>
+                                        <td>Vulnerable</td>
+                                        <td>Critical security vulnerability</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- Troubleshooting Section -->
+                    <section id="troubleshooting" class="mb-5">
+                        <h2 class="border-bottom pb-2">Troubleshooting</h2>
+
+                        <h3>Common Issues</h3>
+
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h5>sslscan command not found</h5>
+                            </div>
+                            <div class="card-body">
+                                <p><strong>Problem:</strong> The application can't find the sslscan binary.</p>
+                                <p><strong>Solution:</strong></p>
+                                <ul>
+                                    <li>Make sure sslscan is installed and in your PATH</li>
+                                    <li>On macOS: <code>brew install sslscan</code></li>
+                                    <li>On Ubuntu/Debian: <code>sudo apt install sslscan</code></li>
+                                    <li>Verify installation: <code>sslscan --version</code></li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h5>Python dependencies not found</h5>
+                            </div>
+                            <div class="card-body">
+                                <p><strong>Problem:</strong> Missing Python packages.</p>
+                                <p><strong>Solution:</strong></p>
+                                <ul>
+                                    <li>Install requirements: <code>pip3 install -r requirements.txt</code></li>
+                                    <li>Use virtual environment if needed</li>
+                                    <li>Check Python version: <code>python3 --version</code></li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h5>Database connection errors</h5>
+                            </div>
+                            <div class="card-body">
+                                <p><strong>Problem:</strong> Can't connect to database.</p>
+                                <p><strong>Solution:</strong></p>
+                                <ul>
+                                    <li>Check DATABASE_URL environment variable</li>
+                                    <li>Ensure database server is running (for PostgreSQL)</li>
+                                    <li>Verify file permissions for SQLite</li>
+                                    <li>Application creates SQLite database automatically if not found</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h5>Scan timeouts</h5>
+                            </div>
+                            <div class="card-body">
+                                <p><strong>Problem:</strong> Scans timing out for certain domains.</p>
+                                <p><strong>Solution:</strong></p>
+                                <ul>
+                                    <li>Check network connectivity to target domain</li>
+                                    <li>Verify domain is accessible on port 443</li>
+                                    <li>Some domains may block scanning tools</li>
+                                    <li>Firewall rules might be blocking connections</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <h3>Debug Mode</h3>
+                        <div class="card bg-dark border-secondary">
+                            <div class="card-body">
+                                <pre class="bg-secondary text-light p-3 rounded"><code># Enable debug mode in app.py
+app.run(host='0.0.0.0', port=5000, debug=True)</code></pre>
+                            </div>
+                        </div>
+
+                        <h3>Support</h3>
+                        <p>For additional support or to report bugs, please check the application logs and system requirements. The application includes comprehensive error handling and fallback mechanisms for most common scenarios.</p>
+                    </section>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Initialize Feather icons when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof feather !== 'undefined') {
+        feather.replace();
+    }
+});
+</script>
+{% endblock %}

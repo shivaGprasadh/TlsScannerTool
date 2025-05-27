@@ -253,13 +253,13 @@
                 </div>
                 <div class="card-body">
                     {% set ciphers = latest_scan.supported_ciphers | from_json %}
-                    {% if ciphers %}
+                    {% if ciphers and ciphers|length > 0 %}
                     <div class="table-responsive">
                         <table class="table table-sm">
                             <thead>
                                 <tr>
-                                    <th>Protocol</th>
                                     <th>Cipher Suite</th>
+                                    <th>Protocol</th>
                                     <th>Key Size</th>
                                     <th>Preference</th>
                                     <th>Security</th>
@@ -267,18 +267,20 @@
                             </thead>
                             <tbody>
                                 {% for cipher in ciphers %}
-                                <tr class="{{ 'table-warning' if cipher.is_weak else '' }}">
-                                    <td>{{ cipher.protocol }}</td>
+                                <tr>
                                     <td><code>{{ cipher.name }}</code></td>
+                                    <td>{{ cipher.protocol }}</td>
                                     <td>{{ cipher.bits }} bits</td>
                                     <td>
-                                        <span class="badge bg-{{ 'primary' if cipher.preference == 'Preferred' else 'secondary' }}">
-                                            {{ cipher.preference }}
-                                        </span>
+                                        {% if cipher.preference == 'Preferred' %}
+                                            <span class="badge bg-primary">{{ cipher.preference }}</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ cipher.preference }}</span>
+                                        {% endif %}
                                     </td>
                                     <td>
                                         {% if cipher.is_weak %}
-                                            <span class="badge bg-warning">Weak</span>
+                                            <span class="badge bg-danger">Weak</span>
                                         {% else %}
                                             <span class="badge bg-success">Strong</span>
                                         {% endif %}

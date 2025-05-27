@@ -1,0 +1,63 @@
+INFO:werkzeug:127.0.0.1 - - [27/May/2025 21:31:47] "GET /api/scan_status HTTP/1.1" 200 -
+ERROR:ssl_scanner:sslscan command timed out after 30 seconds
+WARNING:ssl_scanner:sslscan command not available, falling back to Python SSL scanner for cms.devtest.experience.com
+INFO:werkzeug:127.0.0.1 - - [27/May/2025 21:31:49] "GET /api/scan_status HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [27/May/2025 21:31:49] "GET /api/scan_status HTTP/1.1" 200 -
+INFO:ssl_scanner:cms.devtest.experience.com: TLSv1.3 supported
+INFO:werkzeug:127.0.0.1 - - [27/May/2025 21:31:51] "GET /api/scan_status HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [27/May/2025 21:31:51] "GET /api/scan_status HTTP/1.1" 200 -
+DEBUG:ssl_scanner:cms.devtest.experience.com: SSLv2 not supported (TLS alert received)
+INFO:ssl_scanner:Scanning community.experience.com with sslscan command-line tool
+DEBUG:ssl_scanner:Running command: sslscan --no-colour community.experience.com
+INFO:werkzeug:127.0.0.1 - - [27/May/2025 21:31:53] "GET /api/scan_status HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [27/May/2025 21:31:53] "GET /api/scan_status HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [27/May/2025 21:31:55] "GET /api/scan_status HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [27/May/2025 21:31:55] "GET /api/scan_status HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [27/May/2025 21:31:57] "GET /api/scan_status HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [27/May/2025 21:31:57] "GET /api/scan_status HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [27/May/2025 21:31:59] "GET /api/scan_status HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [27/May/2025 21:31:59] "GET /api/scan_status HTTP/1.1" 200 -
+DEBUG:ssl_scanner:sslscan output length: 2423 characters
+DEBUG:ssl_scanner:Parsing sslscan output (first 500 chars): Version: 2.1.6
+OpenSSL 3.5.0 8 Apr 2025
+
+Connected to 13.126.23.67
+
+Testing SSL server community.experience.com on port 443 using SNI name community.experience.com
+
+  SSL/TLS Protocols:
+SSLv2     disabled
+SSLv3     disabled
+TLSv1.0   disabled
+TLSv1.1   disabled
+TLSv1.2   enabled
+TLSv1.3   enabled
+
+  TLS Fallback SCSV:
+Server supports TLS Fallback SCSV
+
+  TLS renegotiation:
+Session renegotiation not supported
+
+  TLS Compression:
+OpenSSL version does not support compression
+Rebuild with zlib1g-dev
+DEBUG:ssl_scanner:Parsed protocols: {'sslv2': False, 'sslv3': False, 'tlsv1_0': False, 'tlsv1_1': False, 'tlsv1_2': True, 'tlsv1_3': True}
+DEBUG:ssl_scanner:Found cipher section: Preferred TLSv1.3  256 bits  TLS_AES_256_GCM_SHA384        Curve 25519 DHE 253
+Accepted  TLSv1.3  256 bits  TLS_CHACHA20_POLY1305_SHA256  Curve 25519 DHE 253
+Accepted  TLSv1.3  128 bits  TLS_AES_128_G...
+DEBUG:ssl_scanner:Successfully parsed cipher: {'preference': 'Preferred', 'protocol': 'TLSv1.3', 'bits': 256, 'name': 'TLS_AES_256_GCM_SHA384', 'is_weak': True, 'additional_info': 'Curve 25519 DHE 253'}
+DEBUG:ssl_scanner:Successfully parsed cipher: {'preference': 'Accepted', 'protocol': 'TLSv1.3', 'bits': 256, 'name': 'TLS_CHACHA20_POLY1305_SHA256', 'is_weak': True, 'additional_info': 'Curve 25519 DHE 253'}
+DEBUG:ssl_scanner:Successfully parsed cipher: {'preference': 'Accepted', 'protocol': 'TLSv1.3', 'bits': 128, 'name': 'TLS_AES_128_GCM_SHA256', 'is_weak': True, 'additional_info': 'Curve 25519 DHE 253'}
+DEBUG:ssl_scanner:Successfully parsed cipher: {'preference': 'Preferred', 'protocol': 'TLSv1.2', 'bits': 256, 'name': 'ECDHE-RSA-AES256-GCM-SHA384', 'is_weak': True, 'additional_info': 'Curve 25519 DHE 253'}
+DEBUG:ssl_scanner:Successfully parsed cipher: {'preference': 'Accepted', 'protocol': 'TLSv1.2', 'bits': 128, 'name': 'ECDHE-RSA-AES128-GCM-SHA256', 'is_weak': True, 'additional_info': 'Curve 25519 DHE 253'}
+DEBUG:ssl_scanner:Successfully parsed cipher: {'preference': 'Accepted', 'protocol': 'TLSv1.2', 'bits': 256, 'name': 'ECDHE-RSA-AES256-SHA384', 'is_weak': True, 'additional_info': 'Curve 25519 DHE 253'}
+DEBUG:ssl_scanner:Successfully parsed cipher: {'preference': 'Accepted', 'protocol': 'TLSv1.2', 'bits': 128, 'name': 'ECDHE-RSA-AES128-SHA256', 'is_weak': True, 'additional_info': 'Curve 25519 DHE 253'}
+DEBUG:ssl_scanner:Successfully parsed cipher: {'preference': 'Accepted', 'protocol': 'TLSv1.2', 'bits': 256, 'name': 'AES256-GCM-SHA384', 'is_weak': True, 'additional_info': ''}
+DEBUG:ssl_scanner:Successfully parsed cipher: {'preference': 'Accepted', 'protocol': 'TLSv1.2', 'bits': 128, 'name': 'AES128-GCM-SHA256', 'is_weak': True, 'additional_info': ''}
+DEBUG:ssl_scanner:Successfully parsed cipher: {'preference': 'Accepted', 'protocol': 'TLSv1.2', 'bits': 256, 'name': 'AES256-SHA256', 'is_weak': True, 'additional_info': ''}
+DEBUG:ssl_scanner:Successfully parsed cipher: {'preference': 'Accepted', 'protocol': 'TLSv1.2', 'bits': 128, 'name': 'AES128-SHA256', 'is_weak': True, 'additional_info': ''}
+DEBUG:ssl_scanner:Successfully parsed cipher: {'preference': 'Accepted', 'protocol': 'TLSv1.2', 'bits': 256, 'name': 'AES256-SHA', 'is_weak': True, 'additional_info': ''}
+DEBUG:ssl_scanner:Successfully parsed cipher: {'preference': 'Accepted', 'protocol': 'TLSv1.2', 'bits': 128, 'name': 'AES128-SHA', 'is_weak': False, 'additional_info': ''}
+DEBUG:ssl_scanner:Total ciphers parsed: 13
+DEBUG:ssl_scanner:Parsed 13 ciphers
